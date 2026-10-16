@@ -1,4 +1,4 @@
--- Face Lock — Mobile with Draggable Button (v6 - NO FREEZE)
+-- Face Lock — Mobile with Draggable Button (v7 - DETECTION FIXED)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,17 +8,22 @@ local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
 -- ===== CONFIG =====
-local LOCK_RANGE     = 100
+local LOCK_RANGE     = 120
 local ROTATION_SPEED = 25
 local SHOW_INDICATOR = true
 local HOLD_TIME      = 2
-local REFIND_COOLDOWN = 0.35   -- prevents spam from rapid taps
+local REFIND_COOLDOWN = 0.35
+local DEBUG          = true    -- set false when you're happy it works
 -- ==================
 
 local isLocked = false
 local target = nil
 local savedAutoRotate = true
 local lastFindTime = 0
+
+local function log(...)
+	if DEBUG then print("[FaceLock]", ...) end
+end
 
 --=====================================================
 -- UI
@@ -106,8 +111,6 @@ local function isCharacterAlive(char)
 	if not char:IsDescendantOf(Workspace) then return false end
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if not hum or hum.Health <= 0 then return false end
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if not root or not root.Parent then return false end
 	return true
 end
 
@@ -118,20 +121,63 @@ local function getRootOf(char)
 		or char:FindFirstChild("Torso")
 end
 
--- Candidate list: players + top-level workspace models (NPCs). NEVER scan all descendants.
+-- IMPORTANT: recurse into Folders only (never into Models), so it's fast.
 local function collectCandidates()
 	local list = {}
+	local seen = {}
+
+	local function add(char)
+		if char and not seen[char] then
+			seen[char] = true
+			table.insert(list, char)
+		end
+	end
+
+	-- Players
 	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr ~= player and plr.Character then
-			table.insert(list, plr.Character)
+			add(plr.Character)
 		end
 	end
-	for _, obj in ipairs(Workspace:GetChildren()) do
-		if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
-			table.insert(list, obj)
+
+	-- Workspace children + recurse into Folders only (depth-limited)
+	local function scan(container, depth)
+		if depth > 4 then return end
+		for _, obj in ipairs(container:GetChildren()) do
+			if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+				add(obj)
+			elseif obj:IsA("Folder") or obj:IsA("Model") then
+				-- Models can contain folders too, so recurse once more
+				scan(obj, depth + 1)
+			end
 		end
 	end
+	scan(Workspace, 0)
+
 	return list
+end
+
+-- Fallback: raycast from camera center to find any Humanoid under the crosshair
+local function raycastTarget()
+	local char = player.Character
+	if not char then return nil end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { char }
+	params.IgnoreWater = true
+
+	local result = Workspace:Raycast(camera.CFrame.Position, camera.CFrame.LookVector * LOCK_RANGE, params)
+	if not result then return nil end
+
+	local hit = result.Instance
+	local model = hit:FindFirstAncestorOfClass("Model")
+	while model do
+		if model:FindFirstChildOfClass("Humanoid") and model ~= char then
+			return model
+		end
+		model = model:FindFirstAncestorOfClass("Model")
+	end
+	return nil
 end
 
 local function findTarget()
@@ -145,8 +191,10 @@ local function findTarget()
 	local camLook = camera.CFrame.LookVector
 
 	local best, bestScore = nil, -math.huge
+	local candidates = collectCandidates()
+	log("candidates:", #candidates)
 
-	for _, char in ipairs(collectCandidates()) do
+	for _, char in ipairs(candidates) do
 		if char ~= character and isCharacterAlive(char) then
 			local theirRoot = getRootOf(char)
 			if theirRoot then
@@ -155,7 +203,8 @@ local function findTarget()
 				if dist <= LOCK_RANGE then
 					local dir = (theirRoot.Position - camPos).Unit
 					local dot = camLook:Dot(dir)
-					if dot > 0.3 then
+					-- Loosened: was 0.3, now 0.1 — nearly anything on screen qualifies
+					if dot > 0.1 then
 						local score = dot * 100 - dist
 						if score > bestScore then
 							bestScore = score
@@ -167,6 +216,20 @@ local function findTarget()
 		end
 	end
 
+	-- Fallback: nothing scored well → try raycast from crosshair
+	if not best then
+		local hit = raycastTarget()
+		if hit then
+			log("raycast fallback found:", hit.Name)
+			best = hit
+		end
+	end
+
+	if best then
+		log("target:", best.Name)
+	else
+		log("no target found")
+	end
 	return best
 end
 
@@ -194,10 +257,9 @@ local function setLocked(state, newTarget)
 	local hum = character and character:FindFirstChildOfClass("Humanoid")
 
 	if state then
-		-- cooldown so spam-tapping doesn't hammer findTarget
 		local now = tick()
-		if not newTarget and (now - lastFindTime) < REFIND_COOLDOWN then
-			target = target -- keep existing
+		if not newTarget and (now - lastFindTime) < REFIND_COOLDOWN and target then
+			-- keep existing
 		else
 			target = newTarget or findTarget()
 			lastFindTime = now
@@ -206,6 +268,7 @@ local function setLocked(state, newTarget)
 		if not target then
 			isLocked = false
 			button.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
+			log("lock failed: no target")
 			task.delay(0.3, function()
 				if not isLocked then
 					button.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
@@ -230,42 +293,36 @@ local function setLocked(state, newTarget)
 end
 
 --=====================================================
--- Rotation (cheap — no scanning here)
+-- Rotation
 --=====================================================
 RunService:BindToRenderStep("FaceLockRotate", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	if not isLocked then return end
 
 	local character = player.Character
 	if not isCharacterAlive(character) then
-		setLocked(false)
-		return
+		setLocked(false); return
 	end
 
 	local myRoot = getRootOf(character)
 	local hum = character:FindFirstChildOfClass("Humanoid")
 	if not myRoot or not myRoot.Parent or not hum then
-		setLocked(false)
-		return
+		setLocked(false); return
 	end
 
-	if not target
-		or not target.Parent
+	if not target or not target.Parent
 		or not target:IsDescendantOf(Workspace)
 		or not isCharacterAlive(target) then
-		setLocked(false)
-		return
+		setLocked(false); return
 	end
 
 	local theirRoot = getRootOf(target)
 	if not theirRoot or not theirRoot.Parent then
-		setLocked(false)
-		return
+		setLocked(false); return
 	end
 
 	local delta = theirRoot.Position - myRoot.Position
 	if delta.Magnitude > LOCK_RANGE * 1.5 then
-		setLocked(false)
-		return
+		setLocked(false); return
 	end
 
 	local flatDir = Vector3.new(delta.X, 0, delta.Z)
