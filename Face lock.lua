@@ -1,8 +1,4 @@
--- Face Lock — Mobile with Draggable Button (v5 FINAL)
--- TAP      = toggle lock
--- HOLD 2s  = drag mode (button follows finger smoothly)
--- Auto-unlocks on death (yours or target's)
-
+-- Face Lock — Mobile with Draggable Button (v6 - NO FREEZE)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -16,11 +12,13 @@ local LOCK_RANGE     = 100
 local ROTATION_SPEED = 25
 local SHOW_INDICATOR = true
 local HOLD_TIME      = 2
+local REFIND_COOLDOWN = 0.35   -- prevents spam from rapid taps
 -- ==================
 
 local isLocked = false
 local target = nil
 local savedAutoRotate = true
+local lastFindTime = 0
 
 --=====================================================
 -- UI
@@ -28,7 +26,7 @@ local savedAutoRotate = true
 local gui = Instance.new("ScreenGui")
 gui.Name = "FaceLockUI"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = false        -- IMPORTANT: keeps AbsolutePosition matching touch coords
+gui.IgnoreGuiInset = false
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local button = Instance.new("TextButton")
@@ -72,7 +70,7 @@ ringStroke.Transparency = 1
 ringStroke.Parent = ring
 
 --=====================================================
--- Target highlight
+-- Highlight
 --=====================================================
 local highlight = Instance.new("Highlight")
 highlight.FillColor = Color3.fromRGB(255, 60, 60)
@@ -103,16 +101,6 @@ end
 --=====================================================
 -- Helpers
 --=====================================================
-local function getCharacterFromPart(part)
-	if not part then return nil end
-	local model = part:FindFirstAncestorOfClass("Model")
-	while model do
-		if model:FindFirstChildOfClass("Humanoid") then return model end
-		model = model:FindFirstAncestorOfClass("Model")
-	end
-	return nil
-end
-
 local function isCharacterAlive(char)
 	if not char or not char.Parent then return false end
 	if not char:IsDescendantOf(Workspace) then return false end
@@ -123,39 +111,55 @@ local function isCharacterAlive(char)
 	return true
 end
 
+local function getRootOf(char)
+	if not char then return nil end
+	return char:FindFirstChild("HumanoidRootPart")
+		or char:FindFirstChild("UpperTorso")
+		or char:FindFirstChild("Torso")
+end
+
+-- Candidate list: players + top-level workspace models (NPCs). NEVER scan all descendants.
+local function collectCandidates()
+	local list = {}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character then
+			table.insert(list, plr.Character)
+		end
+	end
+	for _, obj in ipairs(Workspace:GetChildren()) do
+		if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+			table.insert(list, obj)
+		end
+	end
+	return list
+end
+
 local function findTarget()
 	local character = player.Character
 	if not isCharacterAlive(character) then return nil end
-	local root = character:FindFirstChild("HumanoidRootPart")
+	local root = getRootOf(character)
 	if not root then return nil end
 
 	local myPos = root.Position
+	local camPos = camera.CFrame.Position
+	local camLook = camera.CFrame.LookVector
+
 	local best, bestScore = nil, -math.huge
 
-	for _, obj in ipairs(Workspace:GetDescendants()) do
-		if obj:IsA("BasePart") or obj:IsA("Model") then
-			local char = nil
-			if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
-				char = obj
-			elseif obj:IsA("BasePart") then
-				char = getCharacterFromPart(obj)
-			end
-
-			if char and char ~= character and isCharacterAlive(char) then
-				local theirRoot = char:FindFirstChild("HumanoidRootPart")
-					or char:FindFirstChild("Torso")
-					or char:FindFirstChild("UpperTorso")
-				if theirRoot then
-					local dist = (theirRoot.Position - myPos).Magnitude
-					if dist <= LOCK_RANGE then
-						local dir = (theirRoot.Position - camera.CFrame.Position).Unit
-						local dot = camera.CFrame.LookVector:Dot(dir)
-						if dot > 0.3 then
-							local score = dot * 100 - dist
-							if score > bestScore then
-								bestScore = score
-								best = char
-							end
+	for _, char in ipairs(collectCandidates()) do
+		if char ~= character and isCharacterAlive(char) then
+			local theirRoot = getRootOf(char)
+			if theirRoot then
+				local d = theirRoot.Position - myPos
+				local dist = d.Magnitude
+				if dist <= LOCK_RANGE then
+					local dir = (theirRoot.Position - camPos).Unit
+					local dot = camLook:Dot(dir)
+					if dot > 0.3 then
+						local score = dot * 100 - dist
+						if score > bestScore then
+							bestScore = score
+							best = char
 						end
 					end
 				end
@@ -168,8 +172,10 @@ end
 
 local function updateIndicator()
 	if SHOW_INDICATOR and target and target.Parent and target:IsDescendantOf(Workspace) then
-		highlight.Adornee = target
-		highlight.Parent = target
+		if highlight.Parent ~= target then
+			highlight.Adornee = target
+			highlight.Parent = target
+		end
 	else
 		highlight.Adornee = nil
 		highlight.Parent = nil
@@ -188,7 +194,15 @@ local function setLocked(state, newTarget)
 	local hum = character and character:FindFirstChildOfClass("Humanoid")
 
 	if state then
-		target = newTarget or findTarget()
+		-- cooldown so spam-tapping doesn't hammer findTarget
+		local now = tick()
+		if not newTarget and (now - lastFindTime) < REFIND_COOLDOWN then
+			target = target -- keep existing
+		else
+			target = newTarget or findTarget()
+			lastFindTime = now
+		end
+
 		if not target then
 			isLocked = false
 			button.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
@@ -199,6 +213,7 @@ local function setLocked(state, newTarget)
 			end)
 			return
 		end
+
 		button.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
 		if hum then
 			savedAutoRotate = hum.AutoRotate
@@ -215,7 +230,7 @@ local function setLocked(state, newTarget)
 end
 
 --=====================================================
--- Rotation
+-- Rotation (cheap — no scanning here)
 --=====================================================
 RunService:BindToRenderStep("FaceLockRotate", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	if not isLocked then return end
@@ -226,7 +241,7 @@ RunService:BindToRenderStep("FaceLockRotate", Enum.RenderPriority.Camera.Value +
 		return
 	end
 
-	local myRoot = character:FindFirstChild("HumanoidRootPart")
+	local myRoot = getRootOf(character)
 	local hum = character:FindFirstChildOfClass("Humanoid")
 	if not myRoot or not myRoot.Parent or not hum then
 		setLocked(false)
@@ -241,9 +256,7 @@ RunService:BindToRenderStep("FaceLockRotate", Enum.RenderPriority.Camera.Value +
 		return
 	end
 
-	local theirRoot = target:FindFirstChild("HumanoidRootPart")
-		or target:FindFirstChild("UpperTorso")
-		or target:FindFirstChild("Torso")
+	local theirRoot = getRootOf(target)
 	if not theirRoot or not theirRoot.Parent then
 		setLocked(false)
 		return
@@ -267,29 +280,23 @@ RunService:BindToRenderStep("FaceLockRotate", Enum.RenderPriority.Camera.Value +
 end)
 
 --=====================================================
--- DRAG SYSTEM (rewritten)
+-- Drag
 --=====================================================
-local HOLD_START     = nil       -- tick() when finger pressed
+local HOLD_START     = nil
 local DRAG_MODE      = false
 local DRAG_OFFSET    = Vector2.new(0, 0)
 local HOLD_TASK      = nil
-local LAST_TOUCH_POS = nil       -- Vector2, updated every InputChanged
+local LAST_TOUCH_POS = nil
 
 local function isPrimaryInput(input)
 	return input.UserInputType == Enum.UserInputType.Touch
 		or input.UserInputType == Enum.UserInputType.MouseButton1
 end
 
--- Convert any input (touch or mouse) to a screen Vector2 matching AbsolutePosition space
 local function inputToScreen(input)
-	if input.UserInputType == Enum.UserInputType.Touch then
-		return Vector2.new(input.Position.X, input.Position.Y)
-	end
-	-- Mouse: input.Position for MouseMovement/MouseButton1 also uses screen pixels
 	return Vector2.new(input.Position.X, input.Position.Y)
 end
 
--- Push button to new position with clamping
 local function moveButtonTo(fingerPos)
 	local viewport = camera.ViewportSize
 	local bSize = button.AbsoluteSize
@@ -301,7 +308,6 @@ local function moveButtonTo(fingerPos)
 	button.Position = UDim2.fromOffset(newPos.X, newPos.Y)
 end
 
--- 1) Track finger position globally (fires many times per second)
 UserInputService.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch
 		or input.UserInputType == Enum.UserInputType.MouseMovement then
@@ -309,7 +315,6 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
--- 2) Also track via the button itself (fires reliably while it owns the touch)
 button.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch
 		or input.UserInputType == Enum.UserInputType.MouseMovement then
@@ -317,7 +322,6 @@ button.InputChanged:Connect(function(input)
 	end
 end)
 
--- 3) While dragging, push the button every frame for buttery smoothness
 RunService.RenderStepped:Connect(function()
 	if DRAG_MODE and LAST_TOUCH_POS then
 		moveButtonTo(LAST_TOUCH_POS)
@@ -337,11 +341,9 @@ button.InputBegan:Connect(function(input)
 	HOLD_TASK = task.spawn(function()
 		while HOLD_START do
 			if (tick() - HOLD_START) >= HOLD_TIME then
-				-- Enter drag mode: offset = current finger - button top-left
 				local finger = LAST_TOUCH_POS or inputToScreen(input)
 				local btnPos = Vector2.new(button.AbsolutePosition.X, button.AbsolutePosition.Y)
 				DRAG_OFFSET = finger - btnPos
-
 				DRAG_MODE = true
 				ringStroke.Color = Color3.fromRGB(80, 255, 120)
 				ringStroke.Transparency = 0
@@ -376,7 +378,6 @@ button.InputEnded:Connect(function(input)
 	finishInput(wasDrag, held)
 end)
 
--- Safety net if finger releases outside the button
 UserInputService.InputEnded:Connect(function(input)
 	if not isPrimaryInput(input) then return end
 	if not HOLD_START and not DRAG_MODE then return end
