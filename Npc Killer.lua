@@ -1,7 +1,7 @@
 --[[
     ╔══════════════════════════════════════════╗
-    ║   NPC KILLER — v15 FULL EDITION           ║
-    ║   Quest Aura • Attach • Aimbot • Silent   ║
+    ║   NPC KILLER — v15.1 FULL EDITION         ║
+    ║   Attach No-Collision • Quest Aura        ║
     ╚══════════════════════════════════════════╝
 ]]
 
@@ -38,6 +38,7 @@ local ATTACH = {
     IgnoreFriends = true, IgnoreSelf = true, TeamCheck = false,
     Distance = 3, YOffset = 0, FaceTarget = true,
     AttachedParts = {}, LastCount = 0,
+    CollisionStates = {}, NoCollision = true,
 }
 
 local PAURA = {
@@ -181,7 +182,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.new(1,-60,0,14)
 Subtitle.Position = UDim2.new(0,20,0,34)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "v15 — attach edition"
+Subtitle.Text = "v15.1 — attach no-collision"
 Subtitle.TextColor3 = COLORS.Sub
 Subtitle.Font = Enum.Font.Gotham
 Subtitle.TextSize = 11
@@ -727,6 +728,29 @@ local function cleanAttachConstraints(hrp)
     end
 end
 
+local function disableCollision(target)
+    if not ATTACH.NoCollision then return end
+    local states = {}
+    for _, part in ipairs(target:GetDescendants()) do
+        if part:IsA("BasePart") then
+            states[part] = part.CanCollide
+            pcall(function() part.CanCollide = false end)
+        end
+    end
+    ATTACH.CollisionStates[target] = states
+end
+
+local function restoreCollision(target)
+    local states = ATTACH.CollisionStates[target]
+    if not states then return end
+    for part, canCollide in pairs(states) do
+        if part and part.Parent then
+            pcall(function() part.CanCollide = canCollide end)
+        end
+    end
+    ATTACH.CollisionStates[target] = nil
+end
+
 local function attachOne(target, hrp, myHead)
     if not hrp or not hrp.Parent or not myHead then return end
     local attachPos = (myHead.CFrame * CFrame.new(0, ATTACH.YOffset, -ATTACH.Distance)).Position
@@ -766,6 +790,9 @@ local function attachOne(target, hrp, myHead)
         end
     end
     ATTACH.AttachedParts[target] = hrp
+    if not ATTACH.CollisionStates[target] then
+        disableCollision(target)
+    end
 end
 
 local function detachTarget(target)
@@ -777,6 +804,7 @@ local function detachTarget(target)
                 cleanAttachConstraints(hrp)
             end
         end)
+        restoreCollision(target)
         ATTACH.AttachedParts[target] = nil
     end
 end
@@ -789,8 +817,13 @@ local function detachAll()
                 cleanAttachConstraints(hrp)
             end
         end)
+        restoreCollision(target)
+    end
+    for target in pairs(ATTACH.CollisionStates) do
+        restoreCollision(target)
     end
     ATTACH.AttachedParts = {}
+    ATTACH.CollisionStates = {}
     ATTACH.LastCount = 0
 end
 
@@ -1427,8 +1460,8 @@ AttachInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
 AttachInfoLabel.Parent = AttachInfo
 task.spawn(function()
     while AttachInfo.Parent do
-        AttachInfoLabel.Text = string.format("Attached: %d  •  Mode: %s",
-            ATTACH.LastCount, ATTACH.Mode:upper())
+        AttachInfoLabel.Text = string.format("Attached: %d  •  Mode: %s  •  NoCollide: %s",
+            ATTACH.LastCount, ATTACH.Mode:upper(), ATTACH.NoCollision and "ON" or "OFF")
         task.wait(0.3)
     end
 end)
@@ -1450,6 +1483,17 @@ bindToggle(AttachTool, "Only With Tool", ATTACH.OnlyWithTool,
 local AttachFace = makeButton("Face Target: ON", "👁", COLORS.Cyan, function() end)
 bindToggle(AttachFace, "Face Target", ATTACH.FaceTarget,
     function(s) ATTACH.FaceTarget = s end, "ON", "OFF", COLORS.Success, COLORS.Danger)
+
+local AttachCollision = makeButton("No Collision: ON", "🚫", COLORS.Cyan, function() end)
+bindToggle(AttachCollision, "No Collision", ATTACH.NoCollision,
+    function(s)
+        ATTACH.NoCollision = s
+        if not s then
+            for target in pairs(ATTACH.CollisionStates) do
+                restoreCollision(target)
+            end
+        end
+    end, "ON", "OFF", COLORS.Success, COLORS.Danger)
 
 local AttachPlayers = makeButton("Attach Players: ON", "👤", COLORS.Cyan, function() end)
 bindToggle(AttachPlayers, "Attach Players", ATTACH.TargetPlayers,
@@ -1817,8 +1861,8 @@ if isMobile then
 end
 
 updateClickStatus()
-print("[NPC Killer] v15 loaded ✓")
+print("[NPC Killer] v15.1 loaded ✓")
 print("Silent hook: " .. hookStatus)
 print("Drawing lib: " .. (DrawLib and "available" or "NOT AVAILABLE"))
 print("Aura Mode: LEGIT (quest credit)")
-print("Attach: ready (default TELEPORT mode)")
+print("Attach: ready — No-Collision ON by default")
