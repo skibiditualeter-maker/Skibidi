@@ -37,3 +37,17 @@ tab:CreateButton({
         instantPromptConn = workspace.DescendantAdded:Connect(setInstantPrompt)
     end,
 })
+
+tab:CreateButton({
+    name = "God Mode",
+    callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Rawbr10/Roblox-Scripts/refs/heads/main/God%20Mode%20Script%20Universal"))()
+    end,
+})
+
+tab:CreateButton({
+    name = "Better God Mode",
+    callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/miglels33/God-Mode-Script/refs/heads/main/GodModeScript.md"))()
+    end,
+})
