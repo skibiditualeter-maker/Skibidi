@@ -51,3 +51,31 @@ tab:CreateButton({
         loadstring(game:HttpGet("https://raw.githubusercontent.com/miglels33/God-Mode-Script/refs/heads/main/GodModeScript.md"))()
     end,
 })
+
+tab:CreateButton({
+    name = "ULTIMATE FPS TOOLS",
+    callback = function()
+        loadstring(game:HttpGet("https://pastebin.com/raw/BuNcwb2t"))()
+    end,
+})
+
+tab:CreateButton({
+    name = "Touch Fling V2",
+    callback = function()
+        loadstring(game:HttpGet("https://pastefy.app/atxaw8zH/raw"))()
+    end,
+})
+
+tab:CreateButton({
+    name = "AN Universal",
+    callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/GUI-Offical/FileTest/refs/heads/main/ANHUBB.lua"))()
+    end,
+})
+
+tab:CreateButton({
+    name = "ESP Pro Max",
+    callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/skibiditualeter-maker/Skibidi/refs/heads/main/Esp%20pro%20max.lua"))()
+    end,
+})
