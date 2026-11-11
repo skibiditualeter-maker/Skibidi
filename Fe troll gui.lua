@@ -74,8 +74,11 @@ tab:CreateButton({
 })
 
 tab:CreateButton({
-    name = "ESP Pro Max",
+    name = "Esp",
     callback = function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/skibiditualeter-maker/Skibidi/refs/heads/main/Esp%20pro%20max.lua"))()
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("https://sneekysscripts.uk/Scripts/Universal_ESP/main.luau"))()
+        end)
+        if not ok then warn("[Esp] Error: " .. tostring(err)) end
     end,
 })
