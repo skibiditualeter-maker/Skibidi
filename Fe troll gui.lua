@@ -77,8 +77,18 @@ tab:CreateButton({
     name = "Esp",
     callback = function()
         local ok, err = pcall(function()
-            loadstring(game:HttpGet("https://sneekysscripts.uk/Scripts/Universal_ESP/main.luau"))()
+            loadstring(game:HttpGet("https://pastebin.com/raw/X8ePspzf"))()
         end)
         if not ok then warn("[Esp] Error: " .. tostring(err)) end
+    end,
+})
+
+tab:CreateButton({
+    name = "Noclip",
+    callback = function()
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("https://pastebin.com/raw/tYSdPEDD"))()
+        end)
+        if not ok then warn("[Noclip] Error: " .. tostring(err)) end
     end,
 })
