@@ -77,7 +77,7 @@ tab:CreateButton({
     name = "Esp",
     callback = function()
         local ok, err = pcall(function()
-            loadstring(game:HttpGet("https://pastebin.com/raw/X8ePspzf"))()
+            loadstring(game:HttpGet("https://sneekysscripts.uk/Scripts/Universal_ESP/main.luau"))()
         end)
         if not ok then warn("[Esp] Error: " .. tostring(err)) end
     end,
