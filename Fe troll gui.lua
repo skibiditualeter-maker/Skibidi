@@ -92,3 +92,13 @@ tab:CreateButton({
         if not ok then warn("[Noclip] Error: " .. tostring(err)) end
     end,
 })
+
+tab:CreateButton({
+    name = "Hitbox Extender",
+    callback = function()
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Vcsk/RobloxScripts/main/HitboxExpander.lua"))()
+        end)
+        if not ok then warn("[Hitbox Extender] Error: " .. tostring(err)) end
+    end,
+})
