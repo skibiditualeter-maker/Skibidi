@@ -102,3 +102,44 @@ tab:CreateButton({
         if not ok then warn("[Hitbox Extender] Error: " .. tostring(err)) end
     end,
 })
+
+tab:CreateButton({
+    name = "Fullbright",
+    callback = function()
+        local ok, err = pcall(function()
+            -- MADE BY MAPSLOVER - Fullbright
+            local lighting = game:GetService("Lighting")
+            local screenGui = Instance.new("ScreenGui", game.CoreGui)
+            local frame = Instance.new("Frame", screenGui)
+            frame.Size = UDim2.new(0, 180, 0, 70)
+            frame.Position = UDim2.new(0.2, 0, 0.5, 0)
+            frame.Active = true
+            frame.Draggable = true
+            frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+
+            local title = Instance.new("TextLabel", frame)
+            title.Size = UDim2.new(1, 0, 0.5, 0)
+            title.Text = "MADE BY MAPSLOVER"
+            title.BackgroundTransparency = 1
+            task.spawn(function()
+                while title.Parent do
+                    for i = 0, 1, 0.01 do
+                        title.TextColor3 = Color3.fromHSV(i, 1, 1)
+                        task.wait(0.05)
+                    end
+                end
+            end)
+
+            local fbButton = Instance.new("TextButton", frame)
+            fbButton.Size = UDim2.new(0.9, 0, 0.4, 0)
+            fbButton.Position = UDim2.new(0.05, 0, 0.55, 0)
+            fbButton.Text = "Enable Fullbright"
+            fbButton.MouseButton1Click:Connect(function()
+                lighting.Ambient = Color3.fromRGB(255, 255, 255)
+                lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+                lighting.Brightness = 2
+            end)
+        end)
+        if not ok then warn("[Fullbright] Error: " .. tostring(err)) end
+    end,
+})
