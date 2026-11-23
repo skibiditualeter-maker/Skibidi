@@ -143,3 +143,23 @@ tab:CreateButton({
         if not ok then warn("[Fullbright] Error: " .. tostring(err)) end
     end,
 })
+
+tab:CreateButton({
+    name = "Vex Emotes",
+    callback = function()
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("https://vexroscripts.com.tr/vexroemotes.luau"))()
+        end)
+        if not ok then warn("[Vex Emotes] Error: " .. tostring(err)) end
+    end,
+})
+
+tab:CreateButton({
+    name = "Cfly",
+    callback = function()
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/skibiditualeter-maker/Skibidi/refs/heads/main/Cfly.lua"))()
+        end)
+        if not ok then warn("[Cfly] Error: " .. tostring(err)) end
+    end,
+})
